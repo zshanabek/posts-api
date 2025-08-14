@@ -1,14 +1,7 @@
-// Controllers/ArticlesController.cs
-
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PostsBlogApi.Data;
 using PostsBlogApi.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
 
 [Route("API/[controller]")]
 [ApiController]
@@ -43,7 +36,7 @@ public class ArticlesController: ControllerBase
     [HttpPost]
     public async Task<ActionResult<Article>> PostArticle(Article article)
     {
-        article.CreatedAt = DateTime.Now;
+        article.CreatedAt = DateTime.UtcNow;
         _context.Articles.Add(article);
         await _context.SaveChangesAsync();
 
