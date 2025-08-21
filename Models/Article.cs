@@ -6,6 +6,8 @@ namespace PostsBlogApi.Models
         public string? Name { get; set; }
         public string? Description { get; set; }
 
+        public User User { get; set; }
+
         public DateTime CreatedAt { get; set; }
     }
 }

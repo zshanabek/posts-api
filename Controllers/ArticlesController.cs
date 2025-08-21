@@ -2,28 +2,59 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PostsBlogApi.Data;
 using PostsBlogApi.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
+using PostsBlogApi.DTOs;
 
 [Route("API/[controller]")]
 [ApiController]
-public class ArticlesController: ControllerBase
+public class ArticlesController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly UserManager<User> _userManager;
 
-    public ArticlesController(AppDbContext context)
+    public ArticlesController(AppDbContext context, UserManager<User> userManager)
     {
         _context = context;
+        _userManager = userManager;
     }
 
+    [Authorize]
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Article>>> GetArticles()
+    public async Task<ActionResult<IEnumerable<ArticleShort>>> GetArticles()
     {
-        return await _context.Articles.ToListAsync();
+        // find user
+        var userId = User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized(new { message = "No valid user ID in token" });
+        var user = await _userManager.FindByNameAsync(userId);
+        if (user == null)
+            return NotFound(new { message = "User not found" });
+
+        // filter articles
+        return await _context.Articles
+            .Where(a => a.User == user)
+            .Select(b => new ArticleShort { Id = b.Id, Name = b.Name, Description = b.Description })
+            .ToListAsync();
     }
 
+    [Authorize]
     [HttpGet("{id}")]
-    public async Task<ActionResult<Article>> GetArticle(int id)
+    public async Task<ActionResult<ArticleShort>> GetArticle(int id)
     {
-        var article = await _context.Articles.FindAsync(id);
+        // find user
+        var userId = User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized(new { message = "No valid user ID in token" });
+        var user = await _userManager.FindByNameAsync(userId);
+        if (user == null)
+            return NotFound(new { message = "User not found" });
+
+        var article = await _context.Articles
+            .Where(a => a.User == user && a.Id == id)
+            .Select(b => new ArticleShort { Id = b.Id, Name = b.Name, Description = b.Description })
+            .FirstOrDefaultAsync();
 
         if (article == null)
         {
@@ -34,13 +65,26 @@ public class ArticlesController: ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<Article>> PostArticle(Article article)
+    [Authorize]
+    public async Task<ActionResult<Article>> PostArticle(CreateArticle articleIn)
     {
+        // find user
+        var userId = User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized(new { message = "No valid user ID in token" });
+        var userDb = await _userManager.FindByNameAsync(userId);
+        if (userDb == null)
+            return NotFound(new { message = "User not found" });
+
+        // create article
+        var article = new Article { Name = articleIn.Name, Description = articleIn.Description, User = userDb };
         article.CreatedAt = DateTime.UtcNow;
         _context.Articles.Add(article);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction("GetArticle", new { id = article.Id }, article);
+        // make response
+        var response = new ArticleShort { Name = article.Name, Description = article.Description, Id = article.Id };
+        return CreatedAtAction("GetArticle", new { id = article.Id }, response);
     }
 
     [HttpPut("{id}")]
